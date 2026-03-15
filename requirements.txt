@@ -9,4 +9,8 @@ langchain-chroma
 chromadb
 langchain-text-splitters
 
+fastapi
+uvicorn
+requests
+
 pytest

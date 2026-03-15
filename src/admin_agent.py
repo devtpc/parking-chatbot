@@ -4,12 +4,12 @@ from langchain_openai import ChatOpenAI
 
 from src.database import (
     get_pending_reservations, approve_reservation, reject_reservation, get_reservation_by_id,
-    get_reservations_by_status
+    get_reservations_by_status, count_free_lots
 )
 from datetime import datetime, UTC
 
 from src.email_notifier import send_admin_reservation_email
-from src.reservation_file_writer import append_approved_reservation_to_file
+from src.mcp_client import write_approved_reservation_via_mcp
 
 SYSTEM_PROMPT = f"""
 You are an administrator assistant for parking reservations.
@@ -88,6 +88,28 @@ def escalate_reservation_to_admin(
     )
 
 def approve_reservation_tool(reservation_id: int) -> str:
+
+    reservation = get_reservation_by_id(reservation_id)
+    if reservation is None:
+        return f"Reservation {reservation_id} does not exist."
+
+    if reservation["status"] != "PENDING_APPROVAL":
+        return (
+            f"Reservation {reservation_id} could not be approved. "
+            "It is no longer pending."
+        )
+
+    free_lots = count_free_lots(
+        reservation["start_time"],
+        reservation["end_time"],
+    )
+
+    if free_lots <= 0:
+        return (
+            f"Reservation {reservation_id} cannot be approved. "
+            "All parking spaces are occupied in this period."
+        )
+
     success = approve_reservation(reservation_id)
 
     if not success:
@@ -103,13 +125,19 @@ def approve_reservation_tool(reservation_id: int) -> str:
             "but the reservation details could not be loaded."
         )
 
-    append_approved_reservation_to_file(
-        name=reservation["name"],
-        car_number=reservation["car_number"],
-        start_time=reservation["start_time"],
-        end_time=reservation["end_time"],
-        approval_time=reservation["approval_time"],
-    )
+    try:
+        write_approved_reservation_via_mcp(
+            name=reservation["name"],
+            car_number=reservation["car_number"],
+            start_time=reservation["start_time"],
+            end_time=reservation["end_time"],
+            approval_time=reservation["approval_time"],
+        )
+    except Exception as e:
+        return (
+            f"Reservation {reservation_id} was approved in the database, "
+            f"but the MCP server failed: {e}"
+        )
 
     return f"Reservation {reservation_id} was approved successfully."
 

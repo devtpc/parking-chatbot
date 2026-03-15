@@ -135,19 +135,72 @@ def reject_reservation(reservation_id: int) -> bool:
         conn.commit()
         return cursor.rowcount > 0
 
+def find_free_lot(start_time: str, end_time: str) -> int | None:
+    query = """
+    SELECT pl.lot_id
+    FROM parking_lots pl
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM reservation_requests rr
+        WHERE rr.assigned_lot = pl.lot_id
+          AND rr.status = 'APPROVED'
+          AND rr.start_time < ?
+          AND rr.end_time > ?
+    )
+    LIMIT 1
+    """
+
+    with get_connection() as conn:
+        row = conn.execute(query, (end_time, start_time)).fetchone()
+        return row["lot_id"] if row else None
+
 
 def approve_reservation(reservation_id: int) -> bool:
     approval_time = datetime.now(UTC).isoformat()
 
     with get_connection() as conn:
+
+        reservation = conn.execute(
+            """
+            SELECT start_time, end_time
+            FROM reservation_requests
+            WHERE id = ? AND status = ?
+            """,
+            (reservation_id, "PENDING_APPROVAL"),
+        ).fetchone()
+
+        if not reservation:
+            return False
+
+        lot = conn.execute(
+            """
+            SELECT pl.lot_id
+            FROM parking_lots pl
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM reservation_requests rr
+                WHERE rr.assigned_lot = pl.lot_id
+                  AND rr.status = 'APPROVED'
+                  AND rr.start_time < ?
+                  AND rr.end_time > ?
+            )
+            LIMIT 1
+            """,
+            (reservation["end_time"], reservation["start_time"]),
+        ).fetchone()
+
+        if not lot:
+            return False
+
         cursor = conn.execute(
             """
             UPDATE reservation_requests
-            SET status = ?, approval_time = ?
-            WHERE id = ? AND status = ?
+            SET status = ?, approval_time = ?, assigned_lot = ?
+            WHERE id = ?
             """,
-            ("APPROVED", approval_time, reservation_id, "PENDING_APPROVAL"),
+            ("APPROVED", approval_time, lot["lot_id"], reservation_id),
         )
+
         conn.commit()
         return cursor.rowcount > 0
 
