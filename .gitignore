@@ -6,3 +6,5 @@ data/chroma/
 data/sqlite.db
 .streamlit/
 .idea
+data/approved_reservations.txt
+data/test_sqlite.db

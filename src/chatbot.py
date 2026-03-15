@@ -7,14 +7,18 @@ from src.database import count_free_lots, insert_pending_reservation
 from src.rag import retrieve_parking_info
 
 from src.admin_agent import escalate_reservation_to_admin
-
+from datetime import datetime, UTC
 import logging
 logging.basicConfig(level=logging.INFO)
 
 
 
-SYSTEM_PROMPT = """
+SYSTEM_PROMPT = f"""
 You are a parking reservation assistant for a private company parking lot.
+
+Current system time: {datetime.now(UTC).isoformat()}.
+Interpret relative dates like "today" or "tomorrow" relative to this time.
+Never assume reservation dates in the past unless explicitly specified.
 
 You may only help with:
 - parking rules

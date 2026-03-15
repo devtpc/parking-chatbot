@@ -1,10 +1,11 @@
+import os
 from pathlib import Path
 import sqlite3
 from datetime import datetime, UTC
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
-DB_PATH = DATA_DIR / "sqlite.db"
+DB_PATH = DATA_DIR / os.getenv("PARKING_DB_FILE", "sqlite.db")
 
 
 def get_connection() -> sqlite3.Connection:
@@ -94,3 +95,85 @@ def get_pending_reservations():
     with get_connection() as conn:
         rows = conn.execute(query).fetchall()
         return [dict(row) for row in rows]
+
+def get_reservation_by_id(reservation_id: int) -> dict | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id, name, car_number, start_time, end_time, status, created_at, assigned_lot, approval_time
+            FROM reservation_requests
+            WHERE id = ?
+            """,
+            (reservation_id,),
+        ).fetchone()
+
+    if row is None:
+        return None
+
+    return {
+        "id": row[0],
+        "name": row[1],
+        "car_number": row[2],
+        "start_time": row[3],
+        "end_time": row[4],
+        "status": row[5],
+        "created_at": row[6],
+        "assigned_lot": row[7],
+        "approval_time": row[8],
+    }
+
+def reject_reservation(reservation_id: int) -> bool:
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE reservation_requests
+            SET status = ?
+            WHERE id = ? AND status = ?
+            """,
+            ("REJECTED", reservation_id, "PENDING_APPROVAL"),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def approve_reservation(reservation_id: int) -> bool:
+    approval_time = datetime.now(UTC).isoformat()
+
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE reservation_requests
+            SET status = ?, approval_time = ?
+            WHERE id = ? AND status = ?
+            """,
+            ("APPROVED", approval_time, reservation_id, "PENDING_APPROVAL"),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+def get_reservations_by_status(status: str) -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, name, car_number, start_time, end_time, status, created_at, assigned_lot, approval_time
+            FROM reservation_requests
+            WHERE status = ?
+            ORDER BY created_at DESC
+            """,
+            (status,),
+        ).fetchall()
+
+    return [
+        {
+            "id": row[0],
+            "name": row[1],
+            "car_number": row[2],
+            "start_time": row[3],
+            "end_time": row[4],
+            "status": row[5],
+            "created_at": row[6],
+            "assigned_lot": row[7],
+            "approval_time": row[8],
+        }
+        for row in rows
+    ]
