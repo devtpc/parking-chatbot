@@ -2,7 +2,7 @@ from pathlib import Path
 import sqlite3
 from datetime import datetime, UTC
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "sqlite.db"
 
@@ -83,3 +83,14 @@ def insert_pending_reservation(
         cur = conn.execute(query, (name, car_number, start_time, end_time, now))
         conn.commit()
         return cur.lastrowid
+
+def get_pending_reservations():
+    query = """
+    SELECT id, name, car_number, start_time, end_time, created_at
+    FROM reservation_requests
+    WHERE status = 'PENDING_APPROVAL'
+    ORDER BY created_at ASC
+    """
+    with get_connection() as conn:
+        rows = conn.execute(query).fetchall()
+        return [dict(row) for row in rows]

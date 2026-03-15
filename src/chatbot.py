@@ -3,8 +3,10 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import StructuredTool
 from langchain_openai import ChatOpenAI
 
-from database import count_free_lots, insert_pending_reservation
-from rag import retrieve_parking_info
+from src.database import count_free_lots, insert_pending_reservation
+from src.rag import retrieve_parking_info
+
+from src.admin_agent import escalate_reservation_to_admin
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -75,6 +77,15 @@ def handle_reservation_request(
         start_time=start_time,
         end_time=end_time,
     )
+
+    escalate_reservation_to_admin(
+        reservation_id=reservation_id,
+        name=name,
+        car_number=car_number,
+        start_time=start_time,
+        end_time=end_time,
+    )
+
     return (
         "Your reservation request has been submitted for admin approval. "
         f"Request id: {reservation_id}."
@@ -99,7 +110,8 @@ def build_agent():
         StructuredTool.from_function(
             func=handle_reservation_request,
             name="handle_reservation_request",
-            description="Save a reservation request. Required fields: name, car_number, start_time, end_time.",
+            description="Create a pending reservation request and escalate it to the administrator. Required fields: name, car_number, start_time, end_time.",
+
         ),
     ]
 
