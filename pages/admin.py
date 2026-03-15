@@ -1,13 +1,13 @@
 import streamlit as st
 
-from src.admin_agent import build_admin_agent, admin_chat
 from src.database import get_pending_reservations
+from src.workflow import build_workflow
 
 st.set_page_config(page_title="Admin – Parking Reservations", page_icon="🛠")
 st.title("Admin – Reservation Approval")
 
-if "admin_agent" not in st.session_state:
-    st.session_state.admin_agent = build_admin_agent()
+if "admin_workflow" not in st.session_state:
+    st.session_state.admin_workflow = build_workflow()
 
 if "admin_messages" not in st.session_state:
     st.session_state.admin_messages = []
@@ -50,11 +50,20 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    reply = admin_chat(
-        agent=st.session_state.admin_agent,
-        user_input=user_input,
-        chat_history=st.session_state.admin_messages,
+    result = st.session_state.admin_workflow.invoke(
+        {
+            "role": "admin",
+            "user_input": user_input,
+            "chat_history": st.session_state.admin_messages,
+            "response": "",
+            "reservation_id": None,
+            "notify_admin": False,
+            "approved_reservation_id": None,
+            "should_record": False,
+        }
     )
+
+    reply = result["response"]
 
     st.session_state.admin_messages.append({"role": "assistant", "content": reply})
 

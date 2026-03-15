@@ -1,15 +1,15 @@
 import streamlit as st
 from dotenv import load_dotenv
 
-from src.chatbot import build_agent, chat
+from src.workflow import build_workflow
 
 load_dotenv()
 
 st.set_page_config(page_title="Parking Chatbot", page_icon="🚗")
 st.title("Parking Reservation Chatbot")
 
-if "agent" not in st.session_state:
-    st.session_state.agent = build_agent()
+if "workflow" not in st.session_state:
+    st.session_state.workflow = build_workflow()
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -30,11 +30,20 @@ if user_input:
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    reply = chat(
-        agent=st.session_state.agent,
-        user_input=user_input,
-        chat_history=st.session_state.chat_history,
+    result = st.session_state.workflow.invoke(
+        {
+            "role": "user",
+            "user_input": user_input,
+            "chat_history": st.session_state.chat_history,
+            "response": "",
+            "reservation_id": None,
+            "notify_admin": False,
+            "approved_reservation_id": None,
+            "should_record": False,
+        }
     )
+
+    reply = result["response"]
 
     st.session_state.messages.append({"role": "assistant", "content": reply})
     st.session_state.chat_history.append({"role": "assistant", "content": reply})

@@ -6,7 +6,6 @@ from langchain_openai import ChatOpenAI
 from src.database import count_free_lots, insert_pending_reservation
 from src.rag import retrieve_parking_info
 
-from src.admin_agent import escalate_reservation_to_admin
 from datetime import datetime, UTC
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -82,13 +81,6 @@ def handle_reservation_request(
         end_time=end_time,
     )
 
-    escalate_reservation_to_admin(
-        reservation_id=reservation_id,
-        name=name,
-        car_number=car_number,
-        start_time=start_time,
-        end_time=end_time,
-    )
 
     return (
         "Your reservation request has been submitted for admin approval. "

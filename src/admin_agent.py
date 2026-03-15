@@ -9,7 +9,7 @@ from src.database import (
 from datetime import datetime, UTC
 
 from src.email_notifier import send_admin_reservation_email
-from src.mcp_client import write_approved_reservation_via_mcp
+
 
 SYSTEM_PROMPT = f"""
 You are an administrator assistant for parking reservations.
@@ -116,27 +116,6 @@ def approve_reservation_tool(reservation_id: int) -> str:
         return (
             f"Reservation {reservation_id} could not be approved. "
             "It may not exist or is no longer pending."
-        )
-
-    reservation = get_reservation_by_id(reservation_id)
-    if reservation is None:
-        return (
-            f"Reservation {reservation_id} was approved, "
-            "but the reservation details could not be loaded."
-        )
-
-    try:
-        write_approved_reservation_via_mcp(
-            name=reservation["name"],
-            car_number=reservation["car_number"],
-            start_time=reservation["start_time"],
-            end_time=reservation["end_time"],
-            approval_time=reservation["approval_time"],
-        )
-    except Exception as e:
-        return (
-            f"Reservation {reservation_id} was approved in the database, "
-            f"but the MCP server failed: {e}"
         )
 
     return f"Reservation {reservation_id} was approved successfully."
