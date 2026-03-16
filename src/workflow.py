@@ -22,7 +22,7 @@ class WorkflowState(TypedDict):
 
 
 def _extract_request_id(text: str) -> int | None:
-    match = re.search(r"Request id:\s*(\d+)", text)
+    match = re.search(r"request\s*id\s*:\s*(\d+)", text, re.IGNORECASE)
     return int(match.group(1)) if match else None
 
 
@@ -40,7 +40,7 @@ def user_interaction_node(state: WorkflowState) -> WorkflowState:
         user_input=state["user_input"],
         chat_history=state["chat_history"],
     )
-
+    print(response)
     reservation_id = _extract_request_id(response)
 
     return {

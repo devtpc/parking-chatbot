@@ -25,27 +25,31 @@ def test_escalate_reservation_to_admin_sends_email(mock_send_email):
         end_time="2026-03-20T12:00:00",
     )
 
-
-@patch("src.admin_agent.append_approved_reservation_to_file")
+@patch("src.admin_agent.count_free_lots")
 @patch("src.admin_agent.get_reservation_by_id")
 @patch("src.admin_agent.approve_reservation")
 def test_approve_reservation_tool_calls_database(
-    mock_approve, mock_get_reservation, mock_file_write
+    mock_approve, mock_get_reservation, mock_count_free_lots
 ):
-    mock_approve.return_value = True
     mock_get_reservation.return_value = {
+        "id": 5,
         "name": "John Doe",
         "car_number": "ABC-123",
         "start_time": "2026-03-20T08:00:00",
         "end_time": "2026-03-20T12:00:00",
-        "approval_time": "2026-03-19T10:00:00",
+        "status": "PENDING_APPROVAL",
     }
+    mock_count_free_lots.return_value = 3
+    mock_approve.return_value = True
 
     result = approve_reservation_tool(5)
 
+    mock_get_reservation.assert_called()
+    mock_count_free_lots.assert_called_once_with(
+        "2026-03-20T08:00:00",
+        "2026-03-20T12:00:00",
+    )
     mock_approve.assert_called_once_with(5)
-    mock_file_write.assert_called_once()
-
     assert result == "Reservation 5 was approved successfully."
 
 

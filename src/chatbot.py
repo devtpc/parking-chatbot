@@ -81,10 +81,10 @@ def handle_reservation_request(
         end_time=end_time,
     )
 
-
     return (
         "Your reservation request has been submitted for admin approval. "
-        f"Request id: {reservation_id}."
+        f"Request id: {reservation_id}. "
+        f"RESERVATION_REQUEST_ID:{reservation_id}"
     )
 
 

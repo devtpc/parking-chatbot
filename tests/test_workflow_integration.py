@@ -17,4 +17,4 @@ def test_full_workflow_user_request():
         }
     )
 
-    assert "Request id" in result["response"]
+    assert result["reservation_id"] is not None
