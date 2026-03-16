@@ -4,11 +4,12 @@ from typing import TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from src.admin_agent import admin_chat, build_admin_agent, escalate_reservation_to_admin
-from src.chatbot import build_agent, chat
+from src.admin_agent import admin_chat, build_admin_agent, escalate_reservation_to_admin, approve_reservation_action
+from src.chatbot import build_agent, chat, create_pending_reservation_action
 from src.database import get_reservation_by_id
 from src.mcp_client import write_approved_reservation_via_mcp
 
+import json
 
 class WorkflowState(TypedDict):
     role: str
@@ -20,28 +21,34 @@ class WorkflowState(TypedDict):
     approved_reservation_id: int | None
     should_record: bool
 
-
-def _extract_request_id(text: str) -> int | None:
-    match = re.search(r"request\s*id\s*:\s*(\d+)", text, re.IGNORECASE)
-    return int(match.group(1)) if match else None
-
-
-def _extract_approved_id(text: str) -> int | None:
-    match = re.search(r"Reservation\s+(\d+)", text)
-    if match and "approved" in text.lower():
-        return int(match.group(1))
-    return None
-
-
 def user_interaction_node(state: WorkflowState) -> WorkflowState:
     agent = build_agent()
-    response = chat(
-        agent=agent,
-        user_input=state["user_input"],
-        chat_history=state["chat_history"],
+
+    result = agent.invoke(
+        {
+            "messages": state["chat_history"] + [
+                {"role": "user", "content": state["user_input"]}
+            ]
+        }
     )
-    print(response)
-    reservation_id = _extract_request_id(response)
+
+    messages = result["messages"]
+    last = messages[-1]
+    response = last.content if hasattr(last, "content") else last["content"]
+
+    reservation_id = None
+
+    for message in messages:
+        name = getattr(message, "name", None)
+        content = getattr(message, "content", None)
+
+        if name == "handle_reservation_request" and isinstance(content, str):
+            try:
+                payload = json.loads(content)
+                reservation_id = payload.get("reservation_id")
+                break
+            except json.JSONDecodeError:
+                pass
 
     return {
         **state,
@@ -69,19 +76,32 @@ def administrator_approval_node(state: WorkflowState) -> WorkflowState:
         }
 
     if state["role"] == "admin":
+        user_input = state["user_input"].strip().lower()
+
+        approve_match = re.search(r"approve(?:\s+reservation)?\s+(\d+)", user_input)
+        if approve_match:
+            reservation_id = int(approve_match.group(1))
+            result = approve_reservation_action(reservation_id)
+
+            return {
+                **state,
+                "response": result["message"],
+                "approved_reservation_id": result["approved_reservation_id"],
+                "should_record": result["approved_reservation_id"] is not None,
+            }
+
         agent = build_admin_agent()
         response = admin_chat(
             agent=agent,
             user_input=state["user_input"],
             chat_history=state["chat_history"],
         )
-        approved_reservation_id = _extract_approved_id(response)
 
         return {
             **state,
             "response": response,
-            "approved_reservation_id": approved_reservation_id,
-            "should_record": approved_reservation_id is not None,
+            "approved_reservation_id": None,
+            "should_record": False,
         }
 
     return state

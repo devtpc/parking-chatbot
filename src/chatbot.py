@@ -5,7 +5,7 @@ from langchain_openai import ChatOpenAI
 
 from src.database import count_free_lots, insert_pending_reservation
 from src.rag import retrieve_parking_info
-
+import json
 from datetime import datetime, UTC
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +38,7 @@ Rules:
 - Do not invent missing values.
 - If any reservation field is missing, ask the user for it naturally.
 - Only call the reservation tool when all required fields are available.
+- When a tool returns structured reservation data, summarize it naturally for the user and do not display raw JSON.
 """
 
 SENSITIVE_PATTERNS = [
@@ -54,12 +55,12 @@ def check_availability_for_period(start_time: str, end_time: str) -> str:
     return f"There are {free_lots} free parking lots for that period."
 
 
-def handle_reservation_request(
+def create_pending_reservation_action(
     name: str,
     car_number: str,
     start_time: str,
     end_time: str,
-) -> str:
+) -> dict:
     missing = [
         field_name
         for field_name, value in {
@@ -72,7 +73,11 @@ def handle_reservation_request(
     ]
 
     if missing:
-        return f"Missing required fields: {', '.join(missing)}"
+        return {
+            "ok": False,
+            "message": f"Missing required fields: {', '.join(missing)}",
+            "reservation_id": None,
+        }
 
     reservation_id = insert_pending_reservation(
         name=name,
@@ -81,12 +86,27 @@ def handle_reservation_request(
         end_time=end_time,
     )
 
-    return (
-        "Your reservation request has been submitted for admin approval. "
-        f"Request id: {reservation_id}. "
-        f"RESERVATION_REQUEST_ID:{reservation_id}"
+    return {
+        "ok": True,
+        "message": (
+            "Your reservation request has been submitted for admin approval. "
+            f"Request id: {reservation_id}."
+        ),
+        "reservation_id": reservation_id,
+    }
+def handle_reservation_request(
+    name: str,
+    car_number: str,
+    start_time: str,
+    end_time: str,
+) -> str:
+    result = create_pending_reservation_action(
+        name=name,
+        car_number=car_number,
+        start_time=start_time,
+        end_time=end_time,
     )
-
+    return json.dumps(result)
 
 def build_agent():
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
@@ -106,7 +126,7 @@ def build_agent():
         StructuredTool.from_function(
             func=handle_reservation_request,
             name="handle_reservation_request",
-            description="Create a pending reservation request and escalate it to the administrator. Required fields: name, car_number, start_time, end_time.",
+            description="Create a pending reservation request. Required fields: name, car_number, start_time, end_time.",
 
         ),
     ]

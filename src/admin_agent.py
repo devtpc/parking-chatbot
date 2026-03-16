@@ -87,17 +87,24 @@ def escalate_reservation_to_admin(
         end_time=end_time,
     )
 
-def approve_reservation_tool(reservation_id: int) -> str:
-
+def approve_reservation_action(reservation_id: int) -> dict:
     reservation = get_reservation_by_id(reservation_id)
     if reservation is None:
-        return f"Reservation {reservation_id} does not exist."
+        return {
+            "ok": False,
+            "message": f"Reservation {reservation_id} does not exist.",
+            "approved_reservation_id": None,
+        }
 
     if reservation["status"] != "PENDING_APPROVAL":
-        return (
-            f"Reservation {reservation_id} could not be approved. "
-            "It is no longer pending."
-        )
+        return {
+            "ok": False,
+            "message": (
+                f"Reservation {reservation_id} could not be approved. "
+                "It is no longer pending."
+            ),
+            "approved_reservation_id": None,
+        }
 
     free_lots = count_free_lots(
         reservation["start_time"],
@@ -105,21 +112,36 @@ def approve_reservation_tool(reservation_id: int) -> str:
     )
 
     if free_lots <= 0:
-        return (
-            f"Reservation {reservation_id} cannot be approved. "
-            "All parking spaces are occupied in this period."
-        )
+        return {
+            "ok": False,
+            "message": (
+                f"Reservation {reservation_id} cannot be approved. "
+                "All parking spaces are occupied in this period."
+            ),
+            "approved_reservation_id": None,
+        }
 
     success = approve_reservation(reservation_id)
 
     if not success:
-        return (
-            f"Reservation {reservation_id} could not be approved. "
-            "It may not exist or is no longer pending."
-        )
+        return {
+            "ok": False,
+            "message": (
+                f"Reservation {reservation_id} could not be approved. "
+                "It may not exist or is no longer pending."
+            ),
+            "approved_reservation_id": None,
+        }
 
-    return f"Reservation {reservation_id} was approved successfully."
+    return {
+        "ok": True,
+        "message": f"Reservation {reservation_id} was approved successfully.",
+        "approved_reservation_id": reservation_id,
+    }
 
+def approve_reservation_tool(reservation_id: int) -> str:
+    result = approve_reservation_action(reservation_id)
+    return result["message"]
 
 def reject_reservation_tool(reservation_id: int) -> str:
     success = reject_reservation(reservation_id)
